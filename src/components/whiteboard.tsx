@@ -1,7 +1,7 @@
 import { Tool, useAuth, useWhiteboardOptions } from "@/lib/states";
 import { useParams } from "react-router-dom";
 import { Stage, Line, Layer } from "react-konva";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ToolSelector from "./toolSelector";
 import WhiteboardSettings from "./whiteboardSettings";
 import toast from "react-hot-toast";
@@ -21,16 +21,6 @@ type T_Line = {
 };
 let linesHistory: T_Line[][] = [[]];
 let index = 0;
-
-// function from https://stackoverflow.com/a/15832662/512042
-function downloadURI(uri: string, name: string) {
-  const link = document.createElement("a");
-  link.download = name;
-  link.href = uri;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
 
 export default function Whiteboard() {
   const { boardId } = useParams();
