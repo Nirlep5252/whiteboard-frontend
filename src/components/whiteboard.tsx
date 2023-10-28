@@ -9,6 +9,7 @@ import Cursor from "./cursor";
 import useWebSocket from "react-use-websocket";
 import { Button } from "./ui/button";
 import { Redo2, Undo2 } from "lucide-react";
+import * as htmlToImage from "html-to-image";
 
 type T_Line = {
   tool: Tool;
@@ -20,6 +21,16 @@ type T_Line = {
 };
 let linesHistory: T_Line[][] = [[]];
 let index = 0;
+
+// function from https://stackoverflow.com/a/15832662/512042
+function downloadURI(uri: string, name: string) {
+  const link = document.createElement("a");
+  link.download = name;
+  link.href = uri;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
 export default function Whiteboard() {
   const { boardId } = useParams();
@@ -160,17 +171,27 @@ export default function Whiteboard() {
     });
   }, [tool, sendJsonMessage]);
 
-  const stageRef = useRef(null);
-  const handleExport = () => {
-    const uri = stageRef.current?.toDataURL();
-    console.log(uri);
-    const link = document.createElement("a");
-    link.download = "whiteboard.png";
-    link.href = uri;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const takeScreenShot = async (node: HTMLDivElement | null) => {
+    if (!node) return;
+    const dataURI = await htmlToImage.toJpeg(node, {
+      backgroundColor: "#ffffff",
+    });
+    return dataURI;
   };
+
+  const download = (
+    image: string | undefined,
+    { name = "img", extension = "jpg" } = {}
+  ) => {
+    const a = document.createElement("a");
+    a.href = image!;
+    a.download = `${name}.${extension}`;
+    a.click();
+  };
+
+  const downloadScreenshot = () =>
+    takeScreenShot(stageRef.current).then(download);
 
   if (loading) {
     return (
@@ -181,135 +202,130 @@ export default function Whiteboard() {
   }
 
   return (
-    <Fragment>
-      <div className="relative">
-        {users.map((user, i) => {
-          return (
-            <Cursor
-              key={i}
-              tool={user.tool}
-              username={user.username}
-              x={user.x}
-              y={user.y}
-            />
-          );
-        })}
-        <div className="absolute left-5 top-5">
-          <ToolSelector />
-        </div>
-        <div className="absolute right-5 top-5 z-50 flex gap-5 items-center justify-center">
-          <div>Status: {connected ? "Connected" : "Connecting..."}</div>
-          <WhiteboardSettings />
-        </div>
-        <div className="absolute left-5 bottom-5 z-50">
-          <div className="flex flex-col gap-2 z-50">
-            <div className="undo">
-              <Button onClick={handleUndo} className="z-50" variant={"ghost"}>
-                <Undo2 />
-              </Button>
-            </div>
-            <div className="redo">
-              <Button variant={"ghost"} className="z-50" onClick={handleRedo}>
-                <Redo2 />
-              </Button>
-            </div>
+    <div className="relative">
+      {users.map((user, i) => {
+        return (
+          <Cursor
+            key={i}
+            tool={user.tool}
+            username={user.username}
+            x={user.x}
+            y={user.y}
+          />
+        );
+      })}
+      <div className="absolute left-5 top-5">
+        <ToolSelector />
+      </div>
+      <div className="absolute right-5 top-5 z-50 flex gap-5 items-center justify-center">
+        <div>Status: {connected ? "Connected" : "Connecting..."}</div>
+        <WhiteboardSettings />
+      </div>
+      <div className="absolute left-5 bottom-5 z-50">
+        <div className="flex flex-col gap-2 z-50">
+          <div className="undo">
+            <Button onClick={handleUndo} className="z-50" variant={"ghost"}>
+              <Undo2 />
+            </Button>
+          </div>
+          <div className="redo">
+            <Button variant={"ghost"} className="z-50" onClick={handleRedo}>
+              <Redo2 />
+            </Button>
           </div>
         </div>
-        <div className="absolute right-5 bottom-5 z-50">
-          <Button onClick={handleExport} className="z-50">
-            Download
-          </Button>
-        </div>
-        <div className="z-10">
-          <Stage
-            ref={stageRef}
-            width={window.innerWidth}
-            height={window.innerHeight}
-            onMouseDown={(e) => {
-              setIsDrawing(true);
-              const pos = e.target.getStage()?.getPointerPosition();
-              if (pos && tool !== "select") {
-                setLines([
-                  ...lines,
-                  {
-                    tool,
-                    points: [pos.x, pos.y],
-                    color,
-                    width,
-                    x: 0,
-                    y: 0,
-                  },
-                ]);
-              }
-            }}
-            onMouseUp={() => {
-              setIsDrawing(false);
-              linesHistory = linesHistory.slice(0, index + 1);
-              linesHistory = linesHistory.concat([lines]);
-              index += 1;
-              setLines(lines);
-              sendJsonMessage({
-                type: "lines",
-                lines,
-              });
-            }}
-            onMouseMove={(e) => {
-              if (!isDrawing || tool === "select") return;
-              const stage = e.target.getStage();
-              const point = stage?.getPointerPosition();
-              if (point) {
-                const lastLine = lines[lines.length - 1];
-                lastLine.points = lastLine.points.concat([point?.x, point?.y]);
-                lines.splice(lines.length - 1, 1, lastLine);
-                setLines(lines.concat());
-                // sendJsonMessage({
-                //   type: "lines",
-                //   lines,
-                // });
-              }
-            }}
-          >
-            <Layer>
-              {lines.map((line, i) => (
-                <Line
-                  key={i}
-                  points={line.points}
-                  stroke={line.color}
-                  strokeWidth={line.width}
-                  tension={0.5}
-                  lineCap="round"
-                  lineJoin="round"
-                  draggable={tool === "select"}
-                  x={line.x}
-                  y={line.y}
-                  onDragMove={(e) => {
-                    lines[i].x = e.target.x();
-                    lines[i].y = e.target.y();
-                    setLines(lines);
-                    sendJsonMessage({
-                      type: "lines",
-                      lines,
-                    });
-                  }}
-                  onDragEnd={() => {
-                    linesHistory = linesHistory.slice(0, index + 1);
-                    linesHistory = linesHistory.concat([lines]);
-                    index += 1;
-                    setLines(lines);
-                    sendJsonMessage({
-                      type: "lines",
-                      lines,
-                    });
-                  }}
-                  globalCompositeOperation={
-                    line.tool === "eraser" ? "destination-out" : "source-over"
-                  }
-                />
-              ))}
-            </Layer>
-          </Stage>
-        </div>
       </div>
-    </Fragment>
+      <div className="absolute right-5 bottom-5 z-10">
+        <Button onClick={downloadScreenshot}>Download</Button>
+      </div>
+      <div ref={stageRef}>
+        <Stage
+          width={window.innerWidth}
+          height={window.innerHeight}
+          onMouseDown={(e) => {
+            setIsDrawing(true);
+            const pos = e.target.getStage()?.getPointerPosition();
+            if (pos && tool !== "select") {
+              setLines([
+                ...lines,
+                {
+                  tool,
+                  points: [pos.x, pos.y],
+                  color,
+                  width,
+                  x: 0,
+                  y: 0,
+                },
+              ]);
+            }
+          }}
+          onMouseUp={() => {
+            setIsDrawing(false);
+            linesHistory = linesHistory.slice(0, index + 1);
+            linesHistory = linesHistory.concat([lines]);
+            index += 1;
+            setLines(lines);
+            sendJsonMessage({
+              type: "lines",
+              lines,
+            });
+          }}
+          onMouseMove={(e) => {
+            if (!isDrawing || tool === "select") return;
+            const stage = e.target.getStage();
+            const point = stage?.getPointerPosition();
+            if (point) {
+              const lastLine = lines[lines.length - 1];
+              lastLine.points = lastLine.points.concat([point?.x, point?.y]);
+              lines.splice(lines.length - 1, 1, lastLine);
+              setLines(lines.concat());
+              // sendJsonMessage({
+              //   type: "lines",
+              //   lines,
+              // });
+            }
+          }}
+        >
+          <Layer>
+            {lines.map((line, i) => (
+              <Line
+                key={i}
+                points={line.points}
+                stroke={line.color}
+                strokeWidth={line.width}
+                tension={0.5}
+                lineCap="round"
+                lineJoin="round"
+                draggable={tool === "select"}
+                x={line.x}
+                y={line.y}
+                onDragMove={(e) => {
+                  lines[i].x = e.target.x();
+                  lines[i].y = e.target.y();
+                  setLines(lines);
+                  sendJsonMessage({
+                    type: "lines",
+                    lines,
+                  });
+                }}
+                onDragEnd={() => {
+                  linesHistory = linesHistory.slice(0, index + 1);
+                  linesHistory = linesHistory.concat([lines]);
+                  index += 1;
+                  setLines(lines);
+                  sendJsonMessage({
+                    type: "lines",
+                    lines,
+                  });
+                }}
+                globalCompositeOperation={
+                  line.tool === "eraser" ? "destination-out" : "source-over"
+                }
+              />
+            ))}
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 }
