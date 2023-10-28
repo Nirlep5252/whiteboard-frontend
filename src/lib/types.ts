@@ -4,3 +4,10 @@ export type User = {
   name: string;
   preferred_username: string;
 };
+
+export type Whiteboard = {
+  id: number;
+  name: string;
+  owner: string;
+  created_at: Date;
+};
