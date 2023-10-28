@@ -1,28 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import useAuth from "../Hooks/useAuth";
-import { getData } from "../Lib/api";
-import { useEffect } from "react";
+import { getUser } from "../Lib/api";
 
 function Home() {
   const { isLoading, isAuthenticated, token } = useAuth();
 
-  const helloQuery = useQuery({
+  const { data: userData, isLoading: isUserLoading } = useQuery({
     queryKey: ["hello", token],
-    queryFn: async () => getData(token),
+    queryFn: async () => getUser(token),
   });
-
-  useEffect(() => {
-    console.log(helloQuery.data);
-  }, [helloQuery]);
 
   return (
     <div className="flex">
       <div>
-        {isLoading
-          ? "Loading..."
-          : isAuthenticated
-          ? "Logged in"
-          : "Not logged in"}
+        {isLoading || isUserLoading ? (
+          <p>Loading...</p>
+        ) : isAuthenticated ? (
+          <p>Hello, {userData?.name}!</p>
+        ) : (
+          <p>Not logged in.</p>
+        )}
       </div>
     </div>
   );

@@ -1,14 +1,13 @@
-export const getData = async (token: string) => {
-  if (!token)
-    return {
-      error: true,
-      message: "Unauthorized",
-    };
-  const res = await fetch("/api", {
+import { User } from "./types";
+
+export const getUser = async (token: string) => {
+  if (!token) return null;
+  const res = await fetch("/api/user", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
   const data = await res.json();
-  return data;
+  if (res.status !== 200) throw new Error(data.message);
+  return data as User;
 };
