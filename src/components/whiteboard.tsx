@@ -10,6 +10,7 @@ import useWebSocket from "react-use-websocket";
 import { Button } from "./ui/button";
 import { Redo2, Undo2 } from "lucide-react";
 import * as htmlToImage from "html-to-image";
+import Chat, { Message } from "./chat";
 
 type T_Line = {
   tool: Tool;
@@ -39,6 +40,8 @@ export default function Whiteboard() {
     }[]
   >([]);
   const [connected, setConnected] = useState<boolean>(false);
+
+  const [chat, setChat] = useState<Message[]>();
 
   const handleRedo = () => {
     if (index === linesHistory.length - 1) return;
@@ -73,6 +76,16 @@ export default function Whiteboard() {
       shouldReconnect: () => true,
       onMessage: (e) => {
         const data = JSON.parse(e.data);
+        if (data.type === "chat") {
+          if (data.content) {
+            chat?.push({ username: data.user, content: data.content });
+            setChat(chat?.concat());
+          }
+        }
+        if (data.type === "chat_history") {
+          // setChat(JSON.parse(data.chat));
+          setChat(data.chat);
+        }
         if (data.type === "join") {
           if (data.user === keyCloak.tokenParsed?.preferred_username) {
             toast.success("Joined whiteboard");
@@ -151,7 +164,7 @@ export default function Whiteboard() {
           }
         }
       },
-    }
+    },
   );
 
   useEffect(() => {
@@ -172,7 +185,7 @@ export default function Whiteboard() {
 
   const download = (
     image: string | undefined,
-    { name = "img", extension = "jpg" } = {}
+    { name = "img", extension = "jpg" } = {},
   ) => {
     const a = document.createElement("a");
     a.href = image!;
@@ -190,7 +203,6 @@ export default function Whiteboard() {
       </div>
     );
   }
-
   return (
     <div className="relative">
       {users.map((user, i) => {
@@ -204,6 +216,15 @@ export default function Whiteboard() {
           />
         );
       })}
+      <Chat
+        chat={chat ?? []}
+        onMessage={(messageContent) => {
+          sendJsonMessage({
+            type: "chat",
+            message: messageContent,
+          });
+        }}
+      />
       <div className="absolute left-5 top-5">
         <ToolSelector />
       </div>
@@ -286,7 +307,7 @@ export default function Whiteboard() {
                 tension={0.5}
                 lineCap="round"
                 lineJoin="round"
-                draggable={tool === "select"}
+                draggable={tool === "select" && line.tool !== "eraser"}
                 x={line.x}
                 y={line.y}
                 onDragMove={(e) => {
